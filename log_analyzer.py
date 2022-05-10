@@ -28,9 +28,10 @@ def load_config_from_args(config_from_args):
         pathname = os.path.join(config_from_args, default_filename)
     else:
         logging.error(f"Config file not found: {config_from_args}")
+        return {}
     try:
         with open(pathname, 'rb') as conf_file:
-            return json.load(conf_file, encoding='utf8')
+            return json.load(conf_file)
     except:
         logging.error(f"Can't use config file: {config_from_args}")
         return {}
