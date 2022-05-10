@@ -18,4 +18,4 @@ jobs:
 
       - name: Run test suite
         run: |
-          run test_log_analyzer.py -v
+          python test_log_analyzer.py
