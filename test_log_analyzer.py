@@ -17,7 +17,7 @@ class LogAnalyzerTest(unittest.TestCase):
     def test_get_last_file(self):
         self.assertEqual(
             la.get_last_file(self.default_config),
-            'nginx-access-ui.log-20170630.gz'
+            'nginx-access-ui.log-20210630'
         )
 
     def test_analize_log_file(self):
