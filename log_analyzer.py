@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
 import os
 import re
 import gzip
@@ -9,12 +8,13 @@ import json
 import logging
 import argparse
 from datetime import datetime
+from statistics import median
 
 
 def get_command_options():
     description = "Analyze nginx logfiles and create report."
     parser = argparse.ArgumentParser(description=description)
-    help_description = 'Config file name or config directory by default name "config.py"'
+    help_description = 'Config file name or config directory by default name "config.json"'
     parser.add_argument('--config', nargs=1, metavar='config_file', help=help_description)
     return parser.parse_args()
 
@@ -28,17 +28,15 @@ def load_config_from_args(config_from_args):
         pathname = os.path.join(config_from_args, default_filename)
     else:
         logging.error(f"Config file not found: {config_from_args}")
-        sys.exit(0)
     try:
         with open(pathname, 'rb') as conf_file:
             return json.load(conf_file, encoding='utf8')
-
     except:
         logging.error(f"Can't use config file: {config_from_args}")
         return {}
 
 
-def get_config(args):
+def get_config(*args):
     config = {
         "REPORT_SIZE": 1000,
         "REPORT_DIR": "./reports",
@@ -66,33 +64,23 @@ def get_config(args):
 
 
 def get_last_file(config):
-    try:
-        log_files = {}
-        if os.path.isdir(config['LOG_DIR']):
-            for file_in_dir in os.listdir(config['LOG_DIR']):
-                result = re.search(config["REGEXP_FIND_DATE_FROM_FILE_NAME"], file_in_dir)
-                if result:
-                    datetime_object = datetime.strptime(result.group(1), '%Y%m%d')
-                    log_files[datetime_object] = file_in_dir
-        else:
-            logging.error(f"Can't use log directory: {config['LOG_DIR']}")
+    log_files = {}
+    if os.path.isdir(config['LOG_DIR']):
+        for file_in_dir in os.listdir(config['LOG_DIR']):
+            result = re.search(config["REGEXP_FIND_DATE_FROM_FILE_NAME"], file_in_dir)
+            if result:
+                datetime_object = datetime.strptime(result.group(1), '%Y%m%d')
+                log_files[datetime_object] = file_in_dir
+    else:
+        logging.error(f"Can't use log directory: {config['LOG_DIR']}")
+        return
 
-        if log_files:
-            max_date_in_files = max(dt for dt in log_files.keys())
-            config["REPORT_NAME"] = config["REPORT_NAME"].format(max_date_in_files.strftime("%Y.%m.%d"))
-            return log_files[max_date_in_files]
-        else:
-            return None
-    except:
-        logging.exception("Can't get last log file")
-        sys.exit(0)
-
-
-def median(lst):
-    quotient, remainder = divmod(len(lst), 2)
-    if remainder:
-        return sorted(lst)[quotient]
-    return sum(sorted(lst)[quotient - 1:quotient + 1]) / 2.
+    if log_files:
+        max_date_in_files = max(dt for dt in log_files.keys())
+        config["REPORT_NAME"] = config["REPORT_NAME"].format(max_date_in_files.strftime("%Y.%m.%d"))
+        return log_files[max_date_in_files]
+    else:
+        return None
 
 
 def open_log_file(log_dir, last_log_file):
@@ -105,7 +93,6 @@ def open_log_file(log_dir, last_log_file):
         return fd_log
     except:
         logging.exception("Open file error")
-        sys.exit(0)
 
 
 def check_percent_errors(count_line, count_line_parse_errors, parser_max_percent_errors):
@@ -158,7 +145,6 @@ def analize_log_file(fd_log, config):
         analize_result[key]['time_sum'] = round(analize_result[key]['time_sum'], ROUND_NUMBER)
         del analize_result[key]['time_list']
 
-
     return list(analize_result.values())
 
 
@@ -173,23 +159,10 @@ def save_report_to_file(result, config):
             with open(report_result, "wt") as fout:
                 for line in fin:
                     fout.write(line.replace('$table_json', json.dumps(result)))
-
         return report_result
     except:
         logging.exception("Save report error")
         os.remove(report_result)
-        sys.exit(0)
-
-
-def is_report_was_created(config):
-    try:
-        for file_name in os.listdir(config['REPORT_DIR']):
-            if file_name == config['REPORT_NAME']:
-                return True
-        return False
-    except:
-        logging.exception("Can't read report directory")
-        sys.exit(0)
 
 
 def main():
@@ -202,20 +175,19 @@ def main():
                             level=config['LOG_LEVEL'])
 
         last_log_file = get_last_file(config)
-        if last_log_file:
-            if is_report_was_created(config):
-                logging.info(f"The report for {last_log_file} is ready.")
-            else:
-                fd_log = open_log_file(config['LOG_DIR'], last_log_file)
-                logging.info(f"Start analysis log {last_log_file}")
-                result = analize_log_file(fd_log, config)
-                report_file = save_report_to_file(result, config)
-                logging.info(f"End analysis and save report in {report_file}")
-        else:
+        if not last_log_file:
             logging.info("No file to analyze")
+            return
+        if os.path.exists(os.path.join(config['REPORT_DIR'], config['REPORT_NAME'])):
+            logging.info(f"The report for {last_log_file} is ready.")
+        else:
+            fd_log = open_log_file(config['LOG_DIR'], last_log_file)
+            logging.info(f"Start analysis log {last_log_file}")
+            result = analize_log_file(fd_log, config)
+            report_file = save_report_to_file(result, config)
+            logging.info(f"End analysis and save report in {report_file}")
     except:
         logging.exception("We have a problem")
-        sys.exit(0)
 
 
 if __name__ == "__main__":
