@@ -18,4 +18,4 @@ jobs:
 
       - name: Run test suite
         run: |
-          pipenv run test_log_analyzer.py -v
+          run test_log_analyzer.py -v
