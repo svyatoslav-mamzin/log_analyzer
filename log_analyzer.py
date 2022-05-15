@@ -7,8 +7,11 @@ import gzip
 import json
 import logging
 import argparse
+from collections import namedtuple
 from datetime import datetime
 from statistics import median
+
+NamedFileInfo = namedtuple('NamedFileInfo', ['log_name', 'date_log'])
 
 
 def get_command_options():
@@ -66,32 +69,27 @@ def get_config(*args):
 
 def get_last_file(config):
     log_files = {}
-    if os.path.isdir(config['LOG_DIR']):
-        for file_in_dir in os.listdir(config['LOG_DIR']):
-            result = re.search(config["REGEXP_FIND_DATE_FROM_FILE_NAME"], file_in_dir)
-            if result:
+    for file_in_dir in os.listdir(config['LOG_DIR']):
+        result = re.search(config["REGEXP_FIND_DATE_FROM_FILE_NAME"], file_in_dir)
+        if result:
+            try:
                 datetime_object = datetime.strptime(result.group(1), '%Y%m%d')
                 log_files[datetime_object] = file_in_dir
-    else:
-        logging.error(f"Can't use log directory: {config['LOG_DIR']}")
-        return
+            except ValueError:
+                continue
 
-    if log_files:
-        max_date_in_files = max(dt for dt in log_files.keys())
-        config["REPORT_NAME"] = config["REPORT_NAME"].format(max_date_in_files.strftime("%Y.%m.%d"))
-        return log_files[max_date_in_files]
-    else:
+    if not log_files:
         return None
+
+    max_date_in_files = max(dt for dt in log_files.keys())
+    return NamedFileInfo(log_name=log_files[max_date_in_files],
+                         date_log=max_date_in_files.strftime("%Y.%m.%d"))
 
 
 def open_log_file(log_dir, last_log_file):
     log_file = os.path.join(log_dir, last_log_file)
     try:
-        if log_file.endswith(".gz"):
-            fd_log = gzip.open(log_file, 'rb')
-        else:
-            fd_log = open(log_file, 'r')
-        return fd_log
+        return gzip.open(log_file, 'rb') if log_file.endswith(".gz") else open(log_file)
     except:
         logging.exception("Open file error")
 
@@ -149,13 +147,13 @@ def analize_log_file(fd_log, config):
     return list(analize_result.values())
 
 
-def save_report_to_file(result, config):
+def save_report_to_file(result, date_log, config):
+    report_name = config["REPORT_NAME"].format(date_log)
+    if config.get('REPORT_DIR') and not os.path.isdir(config['REPORT_DIR']):
+        os.mkdir(config['REPORT_DIR'])
+    report_template = config['REPORT_TEMPLATE']
+    report_result = os.path.join(config['REPORT_DIR'], report_name)
     try:
-        if config.get('REPORT_DIR') and not os.path.isdir(config['REPORT_DIR']):
-            os.mkdir(config['REPORT_DIR'])
-
-        report_template = config['REPORT_TEMPLATE']
-        report_result = os.path.join(config['REPORT_DIR'], config['REPORT_NAME'])
         with open(report_template, "rt") as fin:
             with open(report_result, "wt") as fout:
                 for line in fin:
@@ -169,23 +167,22 @@ def save_report_to_file(result, config):
 def main():
     all_args = get_command_options()
     config = get_config(all_args)
+    logging.basicConfig(filename=config["LOG_OUTPUT_FILE"],
+                        format=config["LOG_FORMAT"],
+                        datefmt=config["LOG_DATA_FORMAT"],
+                        level=config['LOG_LEVEL'])
     try:
-        logging.basicConfig(filename=config["LOG_OUTPUT_FILE"],
-                            format=config["LOG_FORMAT"],
-                            datefmt=config["LOG_DATA_FORMAT"],
-                            level=config['LOG_LEVEL'])
-
         last_log_file = get_last_file(config)
         if not last_log_file:
             logging.info("No file to analyze")
             return
-        if os.path.exists(os.path.join(config['REPORT_DIR'], config['REPORT_NAME'])):
-            logging.info(f"The report for {last_log_file} is ready.")
+        if os.path.exists(os.path.join(config['REPORT_DIR'], config['REPORT_NAME'].format(last_log_file.date_log))):
+            logging.info(f"The report for {last_log_file.log_name} is ready.")
         else:
-            fd_log = open_log_file(config['LOG_DIR'], last_log_file)
-            logging.info(f"Start analysis log {last_log_file}")
+            fd_log = open_log_file(config['LOG_DIR'], last_log_file.log_name)
+            logging.info(f"Start analysis log {last_log_file.log_name}")
             result = analize_log_file(fd_log, config)
-            report_file = save_report_to_file(result, config)
+            report_file = save_report_to_file(result, last_log_file.date_log, config)
             logging.info(f"End analysis and save report in {report_file}")
     except:
         logging.exception("We have a problem")

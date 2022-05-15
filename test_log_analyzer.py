@@ -1,5 +1,6 @@
 import unittest
 import os
+from collections import namedtuple
 
 import log_analyzer as la
 
@@ -15,9 +16,14 @@ class LogAnalyzerTest(unittest.TestCase):
         )
 
     def test_get_last_file(self):
+        NamedFileInfo = namedtuple('NamedFileInfo', ['log_name', 'date_log'])
+        NamedFileInfo(log_name='nginx-access-ui.log-20210630', date_log='2021.06.30')
         self.assertEqual(
-            la.get_last_file(self.default_config),
-            'nginx-access-ui.log-20210630'
+            la.get_last_file(self.default_config).log_name, 'nginx-access-ui.log-20210630'
+        )
+
+        self.assertEqual(
+            la.get_last_file(self.default_config).date_log, '2021.06.30'
         )
 
     def test_analize_log_file(self):
@@ -46,9 +52,10 @@ class LogAnalyzerTest(unittest.TestCase):
               'time_avg': 0.068, 'time_max': 0.068, 'time_med': 0.068},
              {'url': '0', 'time_sum': 0.0, 'count': 1, 'count_perc': 50.0, 'time_perc': 0.0, 'time_avg': 0.0,
               'time_max': 0.0, 'time_med': 0.0}]
-        self.assertEqual(la.save_report_to_file(result, self.default_config), './reports/report-{}.html')
+        self.assertEqual(la.save_report_to_file(result, '2021.06.30', self.default_config),
+                         './reports/report-2021.06.30.html')
 
-        self.assertTrue(os.path.exists(la.save_report_to_file(result, self.default_config)))
+        self.assertTrue(os.path.exists(la.save_report_to_file(result, '2021.06.30', self.default_config)))
 
 
 if __name__ == '__main__':
