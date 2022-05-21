@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 import os
 import re
 import gzip
@@ -74,9 +71,9 @@ def get_last_file(config):
         if result:
             try:
                 datetime_object = datetime.strptime(result.group(1), '%Y%m%d')
-                log_files[datetime_object] = file_in_dir
             except ValueError:
                 continue
+            log_files[datetime_object] = file_in_dir
 
     if not log_files:
         return None
@@ -88,10 +85,7 @@ def get_last_file(config):
 
 def open_log_file(log_dir, last_log_file):
     log_file = os.path.join(log_dir, last_log_file)
-    try:
-        return gzip.open(log_file, 'rb') if log_file.endswith(".gz") else open(log_file)
-    except:
-        logging.exception("Open file error")
+    return gzip.open(log_file, 'rb') if log_file.endswith(".gz") else open(log_file)
 
 
 def check_percent_errors(count_line, count_line_parse_errors, parser_max_percent_errors):
@@ -156,8 +150,7 @@ def save_report_to_file(result, date_log, config):
     try:
         with open(report_template, "rt") as fin:
             with open(report_result, "wt") as fout:
-                for line in fin:
-                    fout.write(line.replace('$table_json', json.dumps(result)))
+                fout.write(fin.read().replace('$table_json', json.dumps(result)))
         return report_result
     except:
         logging.exception("Save report error")
